@@ -2,7 +2,7 @@ bl_info = {
 	'name' : 'Actions to Panda3D .egg files batch export',
 	'description' : 'Batch export of Blender actions to Panda3D animation .egg files.',
 	'author' : 'Viktoria Danchenko',
-	'version' : (0, 1),
+	'version' : (0, 2),
 	'blender' : (2, 79, 0),
 	'location' : '3D View > N Panel > Batch .egg animation export',
 	'category' : 'Import-Export',
@@ -25,7 +25,7 @@ class View3DPanel:
 
 
 class EGG_OT_add_animation(bpy.types.Operator):
-	'Add current animation to animations list'
+	'Add current animation to export animations list'
 	bl_idname = 'actions_to_egg.add_current_action'
 	bl_label = 'Add current action'
 
@@ -42,11 +42,15 @@ class EGG_OT_add_animation(bpy.types.Operator):
 		return True
 
 	def execute(self, context):
-		ob = context.object.actions_to_egg
-		i = ob.animations.add()
-		i.select = True
-		i.name = context.active_object.animation_data.action.name
-		i.export_name = i.name
+		try:
+			ob = context.object.actions_to_egg
+		except:
+			pass
+		else:
+			i = ob.animations.add()
+			i.select = True
+			i.name = context.active_object.animation_data.action.name
+			i.export_name = i.name
 		return {'FINISHED'}
 
 
@@ -66,6 +70,136 @@ class EGG_OT_remove_animation(bpy.types.Operator):
 	def execute(self, context):
 		ob = context.object.actions_to_egg
 		ob.animations.remove(ob.animations_index)
+		return {'FINISHED'}
+
+
+class EGG_OT_add_all_actions(bpy.types.Operator):
+	bl_idname = 'actions_to_egg.add_all_actions'
+	bl_label = 'Add all actions'
+
+	@classmethod
+	def poll(cls, context):
+		try:
+			return len(bpy.data.actions) > 0
+		except:
+			pass
+		return False
+
+	def execute(self, context):
+		try:
+			ob = context.object.actions_to_egg
+		except:
+			pass
+		else:
+			context.window.cursor_set('WAIT')
+
+			for act in bpy.data.actions:
+				if act.name in ob.animations:
+					continue # action already in export animation list # skip adding
+				i = ob.animations.add()
+				i.select = True
+				i.name = act.name
+				i.export_name = i.name
+
+			context.window.cursor_set('DEFAULT')
+
+		return {'FINISHED'}
+
+
+class EGG_OT_clear_animations_list(bpy.types.Operator):
+	bl_idname = 'actions_to_egg.clear_animations_list'
+	bl_label = 'Clear export animations list'
+
+	@classmethod
+	def poll(cls, context):
+		try:
+			return len(context.object.actions_to_egg.animations) > 0
+		except:
+			pass
+		return False
+
+	def execute(self, context):
+		try:
+			ob = context.object.actions_to_egg
+		except:
+			pass
+		else:
+			ob.animations.clear()
+		return {'FINISHED'}
+
+
+class EGG_OT_deselect_all_animations(bpy.types.Operator):
+	bl_idname = 'actions_to_egg.deselect_all_animations'
+	bl_label = 'Deselect all export animations'
+
+	@classmethod
+	def poll(cls, context):
+		try:
+			if len(context.object.actions_to_egg.animations) > 0:
+				for animation_item in context.object.actions_to_egg.animations:
+					if animation_item.select:
+						return True
+		except:
+			pass
+		return False
+
+	def execute(self, context):
+		try:
+			ob = context.object.actions_to_egg
+		except:
+			pass
+		else:
+			for animation_item in ob.animations:
+				animation_item.select = False
+		return {'FINISHED'}
+
+
+class EGG_OT_invert_select_animations(bpy.types.Operator):
+	bl_idname = 'actions_to_egg.invert_select_animations'
+	bl_label = 'Invert export animations selection'
+
+	@classmethod
+	def poll(cls, context):
+		try:
+			return len(context.object.actions_to_egg.animations) > 0
+		except:
+			pass
+		return False
+
+	def execute(self, context):
+		try:
+			ob = context.object.actions_to_egg
+		except:
+			pass
+		else:
+			for animation_item in ob.animations:
+				animation_item.select = not animation_item.select
+		return {'FINISHED'}
+
+
+def show_animations_popup_menu(self, context):
+	layout = self.layout
+	layout.operator('actions_to_egg.deselect_all_animations')
+	layout.operator('actions_to_egg.invert_select_animations')
+	layout.separator()
+	layout.operator('actions_to_egg.add_all_actions', icon='ZOOMIN')
+	layout.operator('actions_to_egg.clear_animations_list', icon='X')
+
+
+class EGG_OT_animations_popup_menu(bpy.types.Operator):
+	bl_idname = 'actions_to_egg.animations_popup_menu'
+	bl_label = ''
+
+	@classmethod
+	def poll(cls, context):
+		try:
+			return len(context.object.actions_to_egg.animations) > 0 or len(bpy.data.actions) > 0
+		except:
+			pass
+		return False
+
+	def execute(self, context):
+		context.window_manager.popup_menu(show_animations_popup_menu)
 		return {'FINISHED'}
 
 
@@ -125,6 +259,7 @@ class Animation():
 
 def export_action_to_egg_file(act: bpy.types.Action, ob: Optional[bpy.types.Object] = None,
 		file_path: Optional[str] = None):
+	'Exports action to .egg animation'
 
 	def _get_bones_structure() -> Dict[bpy.types.Bone, Optional[Dict]]:
 		'Returns dict of dicts ... of bones according the armature bones structure'
@@ -266,23 +401,25 @@ class EGG_OT_export_to_path(bpy.types.Operator):
 		ob = context.active_object
 		context.window.cursor_set('WAIT')
 		for animation_item in context.object.actions_to_egg.animations:
-			# try to cancel old animation
-			try:
-				bpy.ops.screen.animation_cancel()
-			except:
-				pass
-			try:
-				act = bpy.data.actions[animation_item.name]
-			except:
-				self.report({'WARNING'}, 'Action not found: {}'.format(animation_item.name))
-			else:
-				if not ob.animation_data:
-					ob.animation_data_create()
-				ob.animation_data.action = act
-				# export animation frames
-				egg_file_path = path.normpath(path.join(context.object.actions_to_egg.animations_path, animation_item.export_name + '.egg'))
-				# todo: check the file path to destination path bound
-				export_action_to_egg_file(act, ob, egg_file_path)
+			if animation_item.select:
+				# try to cancel old animation
+				try:
+					bpy.ops.screen.animation_cancel()
+				except:
+					pass
+				try:
+					act = bpy.data.actions[animation_item.name]
+				except:
+					self.report({'WARNING'}, 'Export: action not found: "{}"'.format(animation_item.name))
+				else:
+					if not ob.animation_data:
+						ob.animation_data_create()
+					ob.animation_data.action = act
+					# export action to .egg animation
+					self.report({'INFO'}, 'Export to "{}"'.format(animation_item.export_name))
+					egg_file_path = path.normpath(path.join(context.object.actions_to_egg.animations_path, animation_item.export_name + '.egg'))
+					# todo: check the file path to destination path bound
+					export_action_to_egg_file(act, ob, egg_file_path)
 
 		context.window.cursor_set('DEFAULT')
 
@@ -290,7 +427,7 @@ class EGG_OT_export_to_path(bpy.types.Operator):
 
 
 class VIEW3D_PT_egg_animations_export(View3DPanel, bpy.types.Panel):
-	'Contains animations list'
+	'Contains export animations list'
 	bl_label = 'Animation to .egg export'
 
 	def draw(self, context):
@@ -298,6 +435,7 @@ class VIEW3D_PT_egg_animations_export(View3DPanel, bpy.types.Panel):
 
 		row = layout.row(align=True)
 		row.operator(operator='actions_to_egg.add_current_action')
+		row.operator(operator='actions_to_egg.animations_popup_menu', text='', icon='COLLAPSEMENU')
 		row.operator(operator='actions_to_egg.remove_action', text='', icon='X')
 		try:
 			layout.template_list(listtype_name='UI_AnimationList_item', list_id='compact',
@@ -343,6 +481,12 @@ classes = (
 	EGG_OT_add_animation,
 	EGG_OT_remove_animation,
 	EGG_OT_export_to_path,
+	# actions popup menu
+	EGG_OT_add_all_actions,
+	EGG_OT_clear_animations_list,
+	EGG_OT_animations_popup_menu,
+	EGG_OT_deselect_all_animations,
+	EGG_OT_invert_select_animations,
 )
 
 def register():
