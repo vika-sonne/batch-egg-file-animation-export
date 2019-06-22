@@ -2,7 +2,7 @@ bl_info = {
 	'name' : 'Actions to Panda3D .egg files batch export',
 	'description' : 'Batch export of Blender actions to Panda3D animation .egg files.',
 	'author' : 'Viktoria Danchenko',
-	'version' : (0, 2),
+	'version' : (0, 3),
 	'blender' : (2, 79, 0),
 	'location' : '3D View > N Panel > Batch .egg animation export',
 	'category' : 'Import-Export',
@@ -364,7 +364,8 @@ def export_action_to_egg_file(act: bpy.types.Action, ob: Optional[bpy.types.Obje
 	# del frames_count
 
 	# .egg file buffer
-	buff = '<CoordinateSystem> {{ Z-up }}\n<Table> {{\n\t<Bundle> {} {{\n'.format(ob.name)
+	buff = '<Comment> {{"{}" by Blender add-on "Actions to Panda3D .egg files batch export"}}\n'.format(act.name)
+	buff += '<CoordinateSystem> {{ Z-up }}\n<Table> {{\n\t<Bundle> {} {{\n'.format(ob.name)
 	buff += '\t\t<Table> "<skeleton>" {\n'
 	bones_structure = _get_bones_structure()
 	# go thru top-level bones
@@ -402,6 +403,8 @@ class EGG_OT_export_to_path(bpy.types.Operator):
 		context.window.cursor_set('WAIT')
 		for animation_item in context.object.actions_to_egg.animations:
 			if animation_item.select:
+				egg_file_path = path.normpath(path.join(context.object.actions_to_egg.animations_path, animation_item.export_name + '.egg'))
+				self.report({'INFO'}, 'Export action "{}" to file "{}"'.format(animation_item.name, egg_file_path))
 				# try to cancel old animation
 				try:
 					bpy.ops.screen.animation_cancel()
@@ -416,8 +419,6 @@ class EGG_OT_export_to_path(bpy.types.Operator):
 						ob.animation_data_create()
 					ob.animation_data.action = act
 					# export action to .egg animation
-					self.report({'INFO'}, 'Export to "{}"'.format(animation_item.export_name))
-					egg_file_path = path.normpath(path.join(context.object.actions_to_egg.animations_path, animation_item.export_name + '.egg'))
 					# todo: check the file path to destination path bound
 					export_action_to_egg_file(act, ob, egg_file_path)
 
@@ -467,9 +468,46 @@ class UI_AnimationList_item(bpy.types.UIList):
 		row.prop(item, 'export_name', text='')
 
 
+def animations_index_changed(self, context):
+	'Selected animation changed in export table'
+	# try to cancel & unlink old animation
+	try:
+		bpy.ops.screen.animation_cancel()
+	except:
+		pass
+	try:
+		# it can happened that unlink action is inaccessible
+		bpy.ops.action.unlink()
+	except:
+		pass
+
+	# play selected action
+	# bpy.data.armatures[0].pose_position='POSE'
+	animation_name = context.object.actions_to_egg.animations[context.object.actions_to_egg.animations_index].name
+	try:
+		# get new animation name
+		act = bpy.data.actions[animation_name]
+		ob = context.active_object
+		if not ob.animation_data:
+			ob.animation_data_create()
+		ob.animation_data.action = act
+	except Exception as e:
+		pass
+	else:
+		# play an action from first to last frames in cycle
+		try:
+			# active_scene = bpy.context.window.scene # 2.80
+			context.scene.frame_start = act.frame_range[0]
+			context.scene.frame_current = act.frame_range[0]
+			context.scene.frame_end = act.frame_range[1]
+			bpy.ops.screen.animation_play()
+		except:
+			pass
+
+
 class AnimationsToEgg_ObjectProperties(bpy.types.PropertyGroup):
 	animations = bpy.props.CollectionProperty(type=AnimationList_item)
-	animations_index = bpy.props.IntProperty()
+	animations_index = bpy.props.IntProperty(update=animations_index_changed)
 	animations_path = bpy.props.StringProperty(subtype='DIR_PATH', description='Path to export .egg files')
 
 

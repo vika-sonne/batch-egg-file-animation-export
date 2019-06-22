@@ -1,6 +1,8 @@
 # batch-egg-file-animation-export
 [Blender](http://www.blender.org/) add-on for batch export of Blender actions to Panda3D animation .egg files.
 
+Attention. Since this add-on wide used python annotations, it requires at least python 3.6.
+
 ## Workflow with batch export
 
 1. Select action in the **Dope Sheet/Action Editor** actions list:
