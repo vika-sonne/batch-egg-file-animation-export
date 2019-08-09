@@ -1,7 +1,5 @@
 # batch-egg-file-animation-export
-[Blender](http://www.blender.org/) add-on for batch export of Blender actions to Panda3D animation .egg files.
-
-Attention. Since this add-on wide used python annotations, it requires at least python 3.6.
+[Blender](http://www.blender.org/) 2.80 add-on for batch export of Blender actions to Panda3D animation .egg files. To use Blender 2.79 just clone/download "blender2.79" branch.
 
 ## Workflow with batch export
 
@@ -12,6 +10,9 @@ Attention. Since this add-on wide used python annotations, it requires at least 
 ![](/images/Blender_add_action.png)
 
 	Then in list table you can change the filename of exported .egg.
+
+1. Use pop-up menu to edit export list table:
+![](/images/Blender_list_menu.png)
 
 1. After all select directory to export Panda3D .egg animation files:
 ![](/images/Blender_add_another_actions.png)

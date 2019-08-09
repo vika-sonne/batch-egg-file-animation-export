@@ -2,8 +2,8 @@ bl_info = {
 	'name' : 'Actions to Panda3D .egg files batch export',
 	'description' : 'Batch export of Blender actions to Panda3D animation .egg files.',
 	'author' : 'Viktoria Danchenko',
-	'version' : (0, 3),
-	'blender' : (2, 79, 0),
+	'version' : (0, 4),
+	'blender' : (2, 80, 0),
 	'location' : '3D View > N Panel > Batch .egg animation export',
 	'category' : 'Import-Export',
 	'wiki_url': 'https://github.com/vika-sonne/batch-egg-file-animation-export',
@@ -182,7 +182,7 @@ def show_animations_popup_menu(self, context):
 	layout.operator('actions_to_egg.deselect_all_animations')
 	layout.operator('actions_to_egg.invert_select_animations')
 	layout.separator()
-	layout.operator('actions_to_egg.add_all_actions', icon='ZOOMIN')
+	layout.operator('actions_to_egg.add_all_actions')
 	layout.operator('actions_to_egg.clear_animations_list', icon='X')
 
 
@@ -344,9 +344,9 @@ def export_action_to_egg_file(act: bpy.types.Action, ob: Optional[bpy.types.Obje
 			animation_bone = animation.get_bone(bone.name)
 			# get bone matrix
 			if bone.parent:
-				matrix = bone.parent.matrix.inverted() * bone.matrix
+				matrix = bone.parent.matrix.inverted() @ bone.matrix
 			else:
-				matrix = ob.matrix_world * bone.matrix
+				matrix = ob.matrix_world @ bone.matrix
 			# add envelopes from bone matrix
 			for envelope_name, value in zip('ijk', matrix.to_scale()):
 				animation_bone.add_envelope_value(envelope_name, value)
@@ -427,9 +427,10 @@ class EGG_OT_export_to_path(bpy.types.Operator):
 		return {'FINISHED'}
 
 
-class VIEW3D_PT_egg_animations_export(View3DPanel, bpy.types.Panel):
+class EGG_PT_egg_animations_export(View3DPanel, bpy.types.Panel):
 	'Contains export animations list'
 	bl_label = 'Animation to .egg export'
+	bl_category = 'Animation'
 
 	def draw(self, context):
 		layout = self.layout
@@ -439,7 +440,7 @@ class VIEW3D_PT_egg_animations_export(View3DPanel, bpy.types.Panel):
 		row.operator(operator='actions_to_egg.animations_popup_menu', text='', icon='COLLAPSEMENU')
 		row.operator(operator='actions_to_egg.remove_action', text='', icon='X')
 		try:
-			layout.template_list(listtype_name='UI_AnimationList_item', list_id='compact',
+			layout.template_list(listtype_name='EGG_UL_animation_list_item', list_id='compact',
 				dataptr=context.object.actions_to_egg, propname='animations',
 				active_dataptr=context.object.actions_to_egg, active_propname='animations_index', rows=3)
 		except:
@@ -452,16 +453,16 @@ class VIEW3D_PT_egg_animations_export(View3DPanel, bpy.types.Panel):
 		row.operator(operator='actions_to_egg.export', text='Export')
 
 
-class AnimationList_item(bpy.types.PropertyGroup):
+class EGG_animation_list_item(bpy.types.PropertyGroup):
 	'Animation to export item'
-	select = bpy.props.BoolProperty(name='Select', description='Whether to export the action')
-	name = bpy.props.StringProperty(name='Name', description='Blender action name')
-	export_name = bpy.props.StringProperty(name='ExportName', description='Panda3D animation name')
+	select: bpy.props.BoolProperty(name='Select', description='Whether to export the action')
+	name: bpy.props.StringProperty(name='Name', description='Blender action name')
+	export_name: bpy.props.StringProperty(name='ExportName', description='Panda3D animation name')
 
 
-class UI_AnimationList_item(bpy.types.UIList):
+class EGG_UL_animation_list_item(bpy.types.UIList):
 
-	def draw_item(self, _context, layout, _data, item: AnimationList_item, _icon, _active_data, _active_propname):
+	def draw_item(self, _context, layout, _data, item: EGG_animation_list_item, _icon, _active_data, _active_propname):
 		row = layout.row(align=True)
 		row.prop(item, 'select', text='')
 		row.label(text=item.name)
@@ -505,17 +506,17 @@ def animations_index_changed(self, context):
 			pass
 
 
-class AnimationsToEgg_ObjectProperties(bpy.types.PropertyGroup):
-	animations = bpy.props.CollectionProperty(type=AnimationList_item)
-	animations_index = bpy.props.IntProperty(update=animations_index_changed)
-	animations_path = bpy.props.StringProperty(subtype='DIR_PATH', description='Path to export .egg files')
+class EGG_object_properties(bpy.types.PropertyGroup):
+	animations: bpy.props.CollectionProperty(type=EGG_animation_list_item)
+	animations_index: bpy.props.IntProperty(update=animations_index_changed)
+	animations_path: bpy.props.StringProperty(subtype='DIR_PATH', description='Path to export .egg files')
 
 
 classes = (
-	AnimationList_item,
-	AnimationsToEgg_ObjectProperties,
-	VIEW3D_PT_egg_animations_export,
-	UI_AnimationList_item,
+	EGG_animation_list_item,
+	EGG_object_properties,
+	EGG_PT_egg_animations_export,
+	EGG_UL_animation_list_item,
 	EGG_OT_add_animation,
 	EGG_OT_remove_animation,
 	EGG_OT_export_to_path,
@@ -530,7 +531,7 @@ classes = (
 def register():
 	for _ in classes:
 		register_class(_)
-	bpy.types.Object.actions_to_egg = bpy.props.PointerProperty(type=AnimationsToEgg_ObjectProperties)
+	bpy.types.Object.actions_to_egg = bpy.props.PointerProperty(type=EGG_object_properties)
 
 def unregister():
 	for _ in reversed(classes):
